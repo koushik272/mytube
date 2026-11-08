@@ -172,17 +172,6 @@ export const WatchPage: React.FC = () => {
 
   const isInvalidVideoId = Boolean(id && !/^[a-zA-Z0-9_-]{11}$/.test(id));
 
-  if (!currentVideo && isLoading) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[calc(100vh-10rem)] p-8">
-        <div className="w-12 h-12 border-4 border-red-600 border-t-transparent rounded-full animate-spin mb-4" />
-        <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
-          Loading YouTube video...
-        </p>
-      </div>
-    );
-  }
-
   const activeVideo = currentVideo || {
     id,
     title: `YouTube Video (${id})`,

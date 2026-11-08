@@ -2,7 +2,9 @@ import { Video } from '../types/video';
 
 const RAW_API_BASE =
   import.meta.env.VITE_API_URL ||
-  (import.meta.env.PROD ? '/api' : 'http://localhost:5000/api');
+  (typeof window !== 'undefined' && window.location.hostname === 'localhost'
+    ? 'http://localhost:5000/api'
+    : '/api');
 const API_BASE = RAW_API_BASE.replace(/\/+$/, '');
 
 export interface SearchFilters {
@@ -61,7 +63,20 @@ export async function searchYouTubeVideos(
   if (filters.publishedAfter) params.append('publishedAfter', filters.publishedAfter);
 
   try {
-    const res = await fetch(`${API_BASE}/youtube/search?${params.toString()}`);
+    let res = await fetch(`${API_BASE}/youtube/search?${params.toString()}`);
+    let contentType = res.headers.get('content-type') || '';
+
+    // If Vite served index.html instead of proxying API, retry directly against localhost:5000
+    if (!contentType.includes('application/json') && !API_BASE.includes('localhost:5000')) {
+      console.warn('API returned non-JSON. Retrying directly on http://localhost:5000/api...');
+      res = await fetch(`http://localhost:5000/api/youtube/search?${params.toString()}`);
+      contentType = res.headers.get('content-type') || '';
+    }
+
+    if (!contentType.includes('application/json')) {
+      throw new Error(`Server returned HTML instead of JSON (${res.status}). Ensure backend is running on port 5000.`);
+    }
+
     const data = await res.json();
     if (!res.ok || !data.success) {
       throw new Error(data.message || `HTTP error! status: ${res.status}`);
@@ -114,7 +129,11 @@ export async function searchYouTubeVideos(
  */
 export async function getYouTubeVideoById(videoId: string): Promise<Video | null> {
   try {
-    const res = await fetch(`${API_BASE}/youtube/videos/${videoId}`);
+    let res = await fetch(`${API_BASE}/youtube/videos/${videoId}`);
+    let contentType = res.headers.get('content-type') || '';
+    if (!contentType.includes('application/json') && !API_BASE.includes('localhost:5000')) {
+      res = await fetch(`http://localhost:5000/api/youtube/videos/${videoId}`);
+    }
     if (!res.ok) return null;
     const data = await res.json();
 

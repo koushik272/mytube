@@ -100,7 +100,6 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   captionsEnabled = false,
   onToggleCaptions,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const positionIntervalRef = useRef<any>(null);
@@ -323,25 +322,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     }
 
     const initPlayer = () => {
-      if (!isMounted || !containerRef.current) return;
+      if (!isMounted) return;
+
+      const iframeId = `yt-player-${videoId}`;
+      const iframeEl = document.getElementById(iframeId);
+      if (!iframeEl) return;
 
       try {
         if (playerRef.current && typeof playerRef.current.destroy === 'function') {
           playerRef.current.destroy();
         }
 
-        playerRef.current = new window.YT.Player(containerRef.current, {
-          videoId,
-          playerVars: {
-            autoplay: 1,
-            enablejsapi: 1,
-            modestbranding: 1,
-            rel: 0,
-            origin: window.location.origin,
-            playsinline: 1,
-            fs: 1,
-            cc_load_policy: captionsEnabled ? 1 : 0,
-          },
+        playerRef.current = new window.YT.Player(iframeId, {
           events: {
             onReady: () => {
               if (isMounted) {
@@ -415,11 +407,20 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     };
 
     if (window.YT && window.YT.Player) {
-      initPlayer();
+      setTimeout(initPlayer, 100);
     } else {
+      const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
+        if (prev) prev();
         initPlayer();
       };
+      const interval = setInterval(() => {
+        if (window.YT && window.YT.Player) {
+          clearInterval(interval);
+          initPlayer();
+        }
+      }, 200);
+      setTimeout(() => clearInterval(interval), 5000);
     }
 
     return () => {
@@ -751,21 +752,19 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         isFullscreen ? 'rounded-none max-h-screen' : ''
       }`}
     >
-      {/* Player container mounted by YouTube IFrame API */}
-      <div ref={containerRef} className="w-full h-full" />
-
-      {/* Fallback standard iframe if API is loading */}
-      {isLoading && !playerRef.current && (
-        <iframe
-          src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(
-            window.location.origin
-          )}&rel=0`}
-          title={title || 'YouTube video player'}
-          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-          allowFullScreen
-          className="w-full h-full border-0 absolute inset-0"
-        />
-      )}
+      {/* Official YouTube IFrame Player */}
+      <iframe
+        id={`yt-player-${videoId}`}
+        key={`yt-iframe-${videoId}`}
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(
+          window.location.origin
+        )}&rel=0&playsinline=1&modestbranding=1&fs=1`}
+        title={title || 'YouTube video player'}
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        className="w-full h-full border-0 absolute inset-0 z-10"
+        onLoad={() => setIsLoading(false)}
+      />
 
       {/* Top Floating Control Bar (Autoplay & Speed Badge) */}
       <div className="absolute top-3 right-3 flex items-center gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
