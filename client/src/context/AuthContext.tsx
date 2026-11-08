@@ -60,6 +60,8 @@ function formatAuthError(error: unknown): string {
       return 'Network connection error. Please check your internet connection.';
     case 'auth/operation-not-allowed':
       return 'This sign-in method is not enabled in Firebase Console.';
+    case 'auth/unauthorized-domain':
+      return 'This domain is not authorized in Firebase. Add your Vercel domain in Firebase Console > Authentication > Settings > Authorized domains.';
     default:
       return (error as { message?: string }).message || 'Authentication failed. Please try again.';
   }
