@@ -29,7 +29,7 @@ import { Video } from '../types/video';
 export const SearchPage: React.FC = () => {
   const [searchParams] = useSearchParams();
   const query = searchParams.get('q') || '';
-  const { playVideo } = useVideo();
+  const { playVideo, setSearchQuery } = useVideo();
   const { addSearchQuery } = useSettings();
 
   const [videos, setVideos] = useState<Video[]>([]);
@@ -50,10 +50,11 @@ export const SearchPage: React.FC = () => {
   // Infinite scroll intersection observer sentinel
   const observerTargetRef = useRef<HTMLDivElement | null>(null);
 
-  // Record valid searches into recent search history
+  // Record valid searches into recent search history and keep search input in sync
   useEffect(() => {
     if (query.trim()) {
       addSearchQuery(query.trim());
+      setSearchQuery(query.trim());
     }
   }, [query]);
 
@@ -408,6 +409,22 @@ export const SearchPage: React.FC = () => {
           <p className="text-sm font-medium text-neutral-600 dark:text-neutral-400">
             Searching real YouTube videos for "{query}"...
           </p>
+        </div>
+      ) : errorMessage && videos.length === 0 ? (
+        <div className="text-center py-16 bg-white dark:bg-[#161616] rounded-3xl border border-neutral-200 dark:border-neutral-800 p-8 shadow-xs">
+          <AlertCircle className="w-10 h-10 text-red-500 mx-auto mb-2 opacity-80" />
+          <p className="text-base text-neutral-800 dark:text-neutral-200 font-semibold">
+            Unable to fetch search results
+          </p>
+          <p className="text-xs text-neutral-500 mt-1 max-w-sm mx-auto">
+            {errorMessage}
+          </p>
+          <button
+            onClick={() => executeSearch(true)}
+            className="mt-4 px-4 py-2 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-semibold cursor-pointer shadow-sm"
+          >
+            Try Again
+          </button>
         </div>
       ) : videos.length === 0 ? (
         <div className="text-center py-20 bg-white dark:bg-[#161616] rounded-3xl border border-neutral-200 dark:border-neutral-800 p-8 shadow-xs">

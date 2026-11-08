@@ -39,6 +39,13 @@ export function createRateLimiter(options: RateLimiterOptions = {}) {
       req.socket.remoteAddress ||
       '127.0.0.1';
 
+    // In local development or loopback testing, bypass rate limit so testing and fast searches are not blocked
+    const isLoopback =
+      clientIp === '127.0.0.1' ||
+      clientIp === '::1' ||
+      clientIp === '::ffff:127.0.0.1' ||
+      clientIp.includes('localhost');
+
     const now = Date.now();
     let record = ipStore.get(clientIp);
 
@@ -59,6 +66,11 @@ export function createRateLimiter(options: RateLimiterOptions = {}) {
     res.setHeader('X-RateLimit-Limit', maxRequests.toString());
     res.setHeader('X-RateLimit-Remaining', remaining.toString());
     res.setHeader('X-RateLimit-Reset', resetSeconds.toString());
+
+    // In local development or loopback testing, do not block requests
+    if (process.env.NODE_ENV !== 'production' || isLoopback) {
+      return next();
+    }
 
     if (record.count > maxRequests) {
       res.setHeader('Retry-After', resetSeconds.toString());

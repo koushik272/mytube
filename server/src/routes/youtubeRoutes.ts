@@ -1,7 +1,6 @@
 // server/src/routes/youtubeRoutes.ts - Validated & Rate-Protected YouTube Endpoints
 import { Router, Request, Response } from 'express';
 import { youtubeService } from '../services/youtubeService.js';
-import { createRateLimiter } from '../middleware/rateLimiter.js';
 import {
   validateSearchQuery,
   validateVideoIdParam,
@@ -11,14 +10,7 @@ import {
 
 const router = Router();
 
-// Rate limiter: 300 requests per 15 minutes per IP
-const apiRateLimiter = createRateLimiter({
-  windowMs: 15 * 60 * 1000,
-  maxRequests: 300,
-  message: 'MyTube API rate limit reached. Please wait before making more requests.',
-});
-
-router.use(apiRateLimiter);
+// Note: Global API rate limiting is enforced in index.ts (/api)
 
 // GET /api/youtube/suggestions - Live search autocomplete
 router.get('/suggestions', async (req: Request, res: Response) => {
