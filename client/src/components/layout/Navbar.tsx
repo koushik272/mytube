@@ -139,6 +139,16 @@ export const Navbar: React.FC = () => {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      if (showSuggestions && selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
+        handleSelectSuggestion(suggestions[selectedSuggestionIndex]);
+      } else {
+        handleSearchSubmit();
+      }
+      return;
+    }
+
     if (!showSuggestions || suggestions.length === 0) return;
 
     if (e.key === 'ArrowDown') {
@@ -147,11 +157,6 @@ export const Navbar: React.FC = () => {
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       setSelectedSuggestionIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-    } else if (e.key === 'Enter') {
-      if (selectedSuggestionIndex >= 0 && selectedSuggestionIndex < suggestions.length) {
-        e.preventDefault();
-        handleSelectSuggestion(suggestions[selectedSuggestionIndex]);
-      }
     } else if (e.key === 'Escape') {
       setShowSuggestions(false);
     }
