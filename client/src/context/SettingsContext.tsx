@@ -54,8 +54,8 @@ export const SettingsProvider: React.FC<{ children: ReactNode }> = ({ children }
   }, [currentUser]);
 
   const updateSettings = async (partial: Partial<UserSettings>) => {
-    const updated = await updateUserSettingsInFirestore(currentUser?.uid, partial);
-    setSettings(updated);
+    setSettings((prev) => ({ ...prev, ...partial }));
+    await updateUserSettingsInFirestore(currentUser?.uid, partial);
   };
 
   const addSearchQuery = async (query: string) => {

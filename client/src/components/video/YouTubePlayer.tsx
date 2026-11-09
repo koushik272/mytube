@@ -169,10 +169,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
   // Playback Speed State & Controller
   const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState<number>(playbackSpeed || 1);
+  const currentSpeedRef = useRef(currentPlaybackSpeed);
+  const prevPlaybackSpeedPropRef = useRef(playbackSpeed);
 
   // Apply playback speed through both YT Player API and direct postMessage
   const applyPlaybackRate = useCallback(
     (speed: number) => {
+      prevPlaybackSpeedPropRef.current = speed;
+      currentSpeedRef.current = speed;
       setCurrentPlaybackSpeed(speed);
       if (onSpeedChange) {
         onSpeedChange(speed);
@@ -204,12 +208,34 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     [videoId, onSpeedChange]
   );
 
-  // Sync with prop changes (e.g. from WatchSettingsModal)
+  // Sync with prop changes from parent (e.g. from WatchSettingsModal)
   useEffect(() => {
-    if (playbackSpeed && playbackSpeed !== currentPlaybackSpeed) {
-      applyPlaybackRate(playbackSpeed);
+    if (playbackSpeed !== undefined && playbackSpeed !== prevPlaybackSpeedPropRef.current) {
+      prevPlaybackSpeedPropRef.current = playbackSpeed;
+      currentSpeedRef.current = playbackSpeed;
+      setCurrentPlaybackSpeed(playbackSpeed);
+
+      if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+        try {
+          playerRef.current.setPlaybackRate(playbackSpeed);
+        } catch {}
+      }
+      const iframeId = `yt-player-frame-${videoId}`;
+      const iframe = document.getElementById(iframeId) as HTMLIFrameElement;
+      if (iframe?.contentWindow) {
+        try {
+          iframe.contentWindow.postMessage(
+            JSON.stringify({
+              event: 'command',
+              func: 'setPlaybackRate',
+              args: [playbackSpeed],
+            }),
+            '*'
+          );
+        } catch {}
+      }
     }
-  }, [playbackSpeed, currentPlaybackSpeed, applyPlaybackRate]);
+  }, [playbackSpeed, videoId]);
 
   const cancelCountdown = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -701,12 +727,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         tagName === 'input' ||
         tagName === 'textarea' ||
         target?.isContentEditable ||
-        target?.getAttribute('role') === 'textbox'
+        target?.getAttribute?.('role') === 'textbox'
       ) {
-        return;
-      }
-
-      if (!playerRef.current || typeof playerRef.current.getPlayerState !== 'function') {
         return;
       }
 
@@ -816,7 +838,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       // < (Shift + ,): Slow down playback speed
       if (e.key === '<' || (e.shiftKey && (e.key === ',' || e.code === 'Comma'))) {
         e.preventDefault();
-        const curIdx = PLAYBACK_SPEEDS.indexOf(currentPlaybackSpeed);
+        const curSpeed = currentSpeedRef.current;
+        const curIdx = PLAYBACK_SPEEDS.indexOf(curSpeed);
         const nextIdx = Math.max(0, (curIdx === -1 ? PLAYBACK_SPEEDS.indexOf(1) : curIdx) - 1);
         const targetSpeed = PLAYBACK_SPEEDS[nextIdx];
         applyPlaybackRate(targetSpeed);
@@ -826,7 +849,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       // > (Shift + .): Speed up playback speed
       if (e.key === '>' || (e.shiftKey && (e.key === '.' || e.code === 'Period'))) {
         e.preventDefault();
-        const curIdx = PLAYBACK_SPEEDS.indexOf(currentPlaybackSpeed);
+        const curSpeed = currentSpeedRef.current;
+        const curIdx = PLAYBACK_SPEEDS.indexOf(curSpeed);
         const nextIdx = Math.min(PLAYBACK_SPEEDS.length - 1, (curIdx === -1 ? PLAYBACK_SPEEDS.indexOf(1) : curIdx) + 1);
         const targetSpeed = PLAYBACK_SPEEDS[nextIdx];
         applyPlaybackRate(targetSpeed);
