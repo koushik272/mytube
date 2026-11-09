@@ -61,12 +61,17 @@ export const WatchPage: React.FC = () => {
     openMiniplayer,
     showToast,
     playVideo,
+    activeVideo: contextActiveVideo,
   } = useVideo();
   const { currentUser, userProfile, requireAuth } = useAuth();
   const { settings, updateSettings, openSettingsModal } = useSettings();
 
   const [currentVideo, setCurrentVideo] = useState<Video | null>(() => {
-    return videos.find((v) => v.id === id) || null;
+    return (
+      (contextActiveVideo && contextActiveVideo.id === id ? contextActiveVideo : null) ||
+      videos.find((v) => v.id === id) ||
+      null
+    );
   });
   const [relatedVideos, setRelatedVideos] = useState<Video[]>([]);
   const [trendingVideos, setTrendingVideos] = useState<Video[]>([]);
@@ -101,8 +106,10 @@ export const WatchPage: React.FC = () => {
     async function loadData() {
       setIsLoading(true);
 
-      // 1. Check in existing memory
-      const matched = videos.find((v) => v.id === id);
+      // 1. Check in context active video or existing memory
+      const matched =
+        (contextActiveVideo && contextActiveVideo.id === id ? contextActiveVideo : null) ||
+        videos.find((v) => v.id === id);
       if (matched) {
         setCurrentVideo(matched);
         playVideo(matched);

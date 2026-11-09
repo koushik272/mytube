@@ -103,7 +103,6 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   captionsEnabled = false,
   onToggleCaptions,
 }) => {
-  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const positionIntervalRef = useRef<any>(null);
@@ -121,10 +120,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   // Sync initial duration if updated from parent
   useEffect(() => {
     const parsed = parseDurationToSeconds(initialDuration);
-    if (parsed > 0 && duration === 0) {
+    if (parsed > 0) {
       setDuration(parsed);
     }
-  }, [initialDuration, duration]);
+  }, [initialDuration]);
 
   // Quality state
   const [availableQualities, setAvailableQualities] = useState<string[]>(['auto']);
@@ -339,7 +338,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     title,
   };
 
-  // Initialize official YouTube Player inside dedicated container
+  // Initialize official YouTube Player connected to the persistent iframe
   useEffect(() => {
     setErrorStatus(null);
     setIsLoading(true);
@@ -348,17 +347,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
     let isMounted = true;
 
-    // 1. If player instance already exists, seamlessly load new video ID
-    if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
-      try {
-        playerRef.current.loadVideoById(videoId);
-        return;
-      } catch (err) {
-        console.warn('loadVideoById failed, re-mounting player:', err);
-      }
-    }
-
-    // 2. Ensure official YouTube IFrame API script is present (single insertion)
+    // 1. Ensure official YouTube IFrame API script is present (single insertion)
     if (!document.getElementById('yt-iframe-api-script')) {
       const tag = document.createElement('script');
       tag.id = 'yt-iframe-api-script';
@@ -367,39 +356,18 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     }
 
     const initPlayer = () => {
-      if (!isMounted || !containerRef.current) return;
+      if (!isMounted) return;
+      const iframeId = `yt-player-frame-${videoId}`;
+      const iframeEl = document.getElementById(iframeId);
+      if (!iframeEl) return;
 
       try {
-        // Clean container and create dedicated mount target div
-        containerRef.current.innerHTML = '';
-        const mountTarget = document.createElement('div');
-        mountTarget.id = `yt-target-${videoId}`;
-        mountTarget.className = 'w-full h-full';
-        containerRef.current.appendChild(mountTarget);
-
-        playerRef.current = new window.YT.Player(mountTarget.id, {
-          videoId,
-          playerVars: {
-            autoplay: 0,
-            enablejsapi: 1,
-            origin: window.location.origin,
-            rel: 0,
-            playsinline: 1,
-            modestbranding: 1,
-            fs: 1,
-          },
+        playerRef.current = new window.YT.Player(iframeId, {
           events: {
             onReady: (event: any) => {
               if (!isMounted) return;
               setIsLoading(false);
               setErrorStatus(null);
-
-              // Set strict referrer policy on generated iframe for production security & anti-Error-153
-              const iframe = containerRef.current?.querySelector('iframe');
-              if (iframe) {
-                iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
-                iframe.className = 'w-full h-full border-0 absolute inset-0 z-10';
-              }
 
               // Query duration & position
               const dur = event.target.getDuration?.() || 0;
@@ -473,11 +441,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           },
         });
       } catch (err: any) {
-        console.warn('Error instantiating YT Player:', err);
-        if (isMounted) {
-          setErrorStatus(err?.message?.includes('Invalid') ? 2 : 5);
-          setIsLoading(false);
-        }
+        console.warn('Error binding YT.Player to iframe:', err);
       }
     };
 
@@ -501,12 +465,12 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     return () => {
       isMounted = false;
       cancelCountdown();
-      if (playerRef.current && typeof playerRef.current.destroy === 'function') {
-        try {
-          playerRef.current.destroy();
-          playerRef.current = null;
-        } catch {}
-      }
+      try {
+        if (playerRef.current && typeof playerRef.current.pauseVideo === 'function') {
+          playerRef.current.pauseVideo();
+        }
+      } catch {}
+      playerRef.current = null;
     };
   }, [videoId, cancelCountdown, startCountdown]);
 
@@ -839,23 +803,31 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   return (
     <div
       ref={wrapperRef}
-      className={`relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-2xl group select-none ${
+      className={`relative w-full aspect-video rounded-2xl overflow-hidden bg-black shadow-2xl group ${
         isFullscreen ? 'rounded-none max-h-screen' : ''
       }`}
     >
-      {/* Official YouTube IFrame Player Mounting Target */}
-      <div
-        ref={containerRef}
-        className="w-full h-full absolute inset-0 z-10 overflow-hidden"
+      {/* Official YouTube IFrame Player Rendered Directly in JSX with Strict Referrer & Feature Permissions */}
+      <iframe
+        id={`yt-player-frame-${videoId}`}
+        key={`yt-player-${videoId}`}
+        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(
+          typeof window !== 'undefined' ? window.location.origin : 'http://localhost:5173'
+        )}&rel=0&playsinline=1`}
+        title={title || 'YouTube video player'}
+        referrerPolicy="strict-origin-when-cross-origin"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+        className="w-full h-full border-0 absolute inset-0 z-10"
       />
 
       {/* Top Floating Control Bar (Autoplay & Speed Badge) */}
-      <div className="absolute top-3 right-3 flex items-center gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className="absolute top-3 right-3 flex items-center gap-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
         {/* Autoplay Toggle Switch */}
         {onToggleAutoplay && (
           <button
             onClick={onToggleAutoplay}
-            className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold backdrop-blur-md transition-all cursor-pointer shadow-md ${
+            className={`pointer-events-auto flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-bold backdrop-blur-md transition-all cursor-pointer shadow-md ${
               autoplayEnabled
                 ? 'bg-red-600 text-white'
                 : 'bg-black/70 text-neutral-300 border border-white/20 hover:bg-black/90'
@@ -877,7 +849,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             setIsSettingsOpen(true);
             setSettingsView('speed');
           }}
-          className="flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-[11px] font-bold border border-white/20 hover:bg-black/90 transition-colors cursor-pointer shadow-md"
+          className="pointer-events-auto flex items-center gap-1 px-2.5 py-1 rounded-full bg-black/70 backdrop-blur-md text-white text-[11px] font-bold border border-white/20 hover:bg-black/90 transition-colors cursor-pointer shadow-md"
           title="Change playback speed"
         >
           <Gauge className="w-3.5 h-3.5 text-blue-400" />
@@ -886,9 +858,9 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       </div>
 
       {/* Bottom Interactive Control Bar Overlay */}
-      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3 pt-6 flex items-center justify-between z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+      <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent p-3 pt-6 flex items-center justify-between z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none">
         {/* Left Controls: Play/Pause, Rewind, Volume Slider, Time Display */}
-        <div className="flex items-center gap-3 text-white">
+        <div className="flex items-center gap-3 text-white pointer-events-auto">
           {/* Play/Pause */}
           <button
             onClick={togglePlayPause}
@@ -950,7 +922,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         </div>
 
         {/* Right Controls: CC, Player Settings Gear, Theater Mode, Fullscreen */}
-        <div className="flex items-center gap-2 text-white">
+        <div className="flex items-center gap-2 text-white pointer-events-auto">
           {/* Subtitles / CC Toggle Button */}
           <button
             onClick={toggleCaptionsQuick}
