@@ -307,6 +307,17 @@ export const WatchPage: React.FC = () => {
     navigate(`/watch/${nextEligibleVideo.id}`);
   };
 
+  // Remote Gesture Action for Next Video
+  useEffect(() => {
+    const handleRemoteNext = (e: any) => {
+      if (e.detail?.action === 'next') {
+        handleTriggerNext();
+      }
+    };
+    window.addEventListener('mytube:player-action', handleRemoteNext);
+    return () => window.removeEventListener('mytube:player-action', handleRemoteNext);
+  }, [handleTriggerNext]);
+
   const renderPlayer = (isTheater: boolean) => (
     <YouTubePlayer
       videoId={activeVideo.id}

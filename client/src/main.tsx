@@ -9,6 +9,7 @@ import { SidebarProvider } from './context/SidebarContext';
 import { VideoProvider } from './context/VideoContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { SettingsProvider } from './context/SettingsContext';
+import { GestureModeProvider } from './context/GestureModeContext';
 
 ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
   <React.StrictMode>
@@ -19,7 +20,9 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
             <SidebarProvider>
               <VideoProvider>
                 <NotificationProvider>
-                  <App />
+                  <GestureModeProvider>
+                    <App />
+                  </GestureModeProvider>
                 </NotificationProvider>
               </VideoProvider>
             </SidebarProvider>

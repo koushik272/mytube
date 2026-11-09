@@ -25,7 +25,9 @@ import {
   Check,
   ChevronRight,
   ChevronLeft,
+  Sparkles,
 } from 'lucide-react';
+import { useGestureMode } from '../../context/GestureModeContext';
 import {
   savePlaybackPosition,
   getSavedPlaybackPosition,
@@ -103,6 +105,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   captionsEnabled = false,
   onToggleCaptions,
 }) => {
+  const { toggleGestureMode } = useGestureMode();
   const playerRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const positionIntervalRef = useRef<any>(null);
@@ -545,6 +548,27 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       console.warn('Fullscreen error:', err);
     }
   };
+
+  // Listen to remote Holographic Gesture actions
+  useEffect(() => {
+    const handleRemoteAction = (e: any) => {
+      const { action, volume: newVol } = e.detail || {};
+      if (action === 'play') {
+        playerRef.current?.playVideo?.();
+        setIsPlaying(true);
+      } else if (action === 'pause') {
+        playerRef.current?.pauseVideo?.();
+        setIsPlaying(false);
+      } else if (action === 'volume' && typeof newVol === 'number') {
+        handleVolumeChange(newVol);
+      } else if (action === 'fullscreen') {
+        toggleFullscreen();
+      }
+    };
+
+    window.addEventListener('mytube:player-action', handleRemoteAction);
+    return () => window.removeEventListener('mytube:player-action', handleRemoteAction);
+  }, []);
 
   // Select Quality
   const handleSelectQuality = (qualityCode: string) => {
@@ -1130,6 +1154,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               <RectangleHorizontal className="w-4 h-4" />
             </button>
           )}
+
+          {/* 3D Holographic Gesture Mode Button */}
+          <button
+            onClick={toggleGestureMode}
+            className="p-1.5 rounded-lg hover:bg-cyan-500/20 text-cyan-400 hover:text-cyan-300 transition-colors cursor-pointer group"
+            title="3D Holographic Gesture Mode"
+          >
+            <Sparkles className="w-4 h-4 animate-pulse group-hover:scale-110 transition-transform" />
+          </button>
 
           {/* Fullscreen Toggle Button */}
           <button

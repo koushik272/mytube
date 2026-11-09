@@ -13,12 +13,14 @@ import {
   History,
   Trash2,
   PauseCircle,
+  Sparkles,
 } from 'lucide-react';
 import { useSidebar } from '../../context/SidebarContext';
 import { useVideo } from '../../context/VideoContext';
 import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationContext';
 import { useSettings } from '../../context/SettingsContext';
+import { useGestureMode } from '../../context/GestureModeContext';
 import { ThemeToggle } from '../common/ThemeToggle';
 import { VoiceSearchModal } from '../common/VoiceSearchModal';
 import { QuickWatchModal } from '../common/QuickWatchModal';
@@ -38,6 +40,7 @@ export const Navbar: React.FC = () => {
     clearAllSearchQueries,
     settings,
   } = useSettings();
+  const { toggleGestureMode } = useGestureMode();
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -487,6 +490,21 @@ export const Navbar: React.FC = () => {
               >
                 <Play className="w-3.5 h-3.5 text-red-600 fill-red-600" />
                 <span>Play URL</span>
+              </button>
+
+              {/* 3D Holographic Gesture Mode Button */}
+              <button
+                onClick={toggleGestureMode}
+                className="relative flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-gradient-to-r from-cyan-500/15 via-teal-500/15 to-emerald-500/15 hover:from-cyan-500/25 hover:to-emerald-500/25 border border-cyan-400/50 hover:border-cyan-400 text-xs font-extrabold text-cyan-600 dark:text-cyan-300 shadow-[0_0_15px_rgba(0,240,255,0.2)] transition-all cursor-pointer group"
+                title="Open 3D Holographic Gesture Mode"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-cyan-500 dark:text-cyan-400 animate-pulse group-hover:rotate-12 transition-transform" />
+                <span className="bg-clip-text text-transparent bg-gradient-to-r from-cyan-600 to-teal-600 dark:from-cyan-300 dark:to-emerald-300">
+                  3D Gesture
+                </span>
+                <span className="hidden lg:inline-block text-[9px] px-1.5 py-0.2 rounded-full bg-cyan-500/20 text-cyan-600 dark:text-cyan-300 font-mono font-bold">
+                  AI
+                </span>
               </button>
 
               {/* Dark / Light Mode Toggle */}

@@ -21,11 +21,13 @@ import {
   Play,
   UserCircle2,
   ListVideo,
+  Sparkles,
 } from 'lucide-react';
 import { useSidebar } from '../../context/SidebarContext';
 import { useVideo } from '../../context/VideoContext';
 import { useAuth } from '../../context/AuthContext';
 import { useSettings } from '../../context/SettingsContext';
+import { useGestureMode } from '../../context/GestureModeContext';
 import { SUBSCRIPTION_CHANNELS } from '../../data/sampleVideos';
 
 export const Sidebar: React.FC = () => {
@@ -33,6 +35,7 @@ export const Sidebar: React.FC = () => {
   const { likedVideos, watchLaterVideos, customPlaylists } = useVideo();
   const { currentUser, openAuthModal } = useAuth();
   const { openSettingsModal } = useSettings();
+  const { openGestureMode } = useGestureMode();
 
   // Navigation link helper
   const navClass = ({ isActive }: { isActive: boolean }) =>
@@ -103,6 +106,16 @@ export const Sidebar: React.FC = () => {
             <PlaySquare className="w-5 h-5" />
             <span>Subscriptions</span>
           </NavLink>
+          <button
+            onClick={() => {
+              closeMobileSidebar();
+              openGestureMode();
+            }}
+            className="w-full flex items-center gap-5 px-3 py-2.5 rounded-xl text-sm font-bold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors cursor-pointer group"
+          >
+            <Sparkles className="w-5 h-5 text-cyan-500 animate-pulse group-hover:scale-110 transition-transform" />
+            <span>3D Gesture Mode</span>
+          </button>
 
           <div className="my-3 border-t border-neutral-200 dark:border-neutral-800" />
 
@@ -196,6 +209,14 @@ export const Sidebar: React.FC = () => {
               <History className="w-5 h-5" />
               <span>History</span>
             </NavLink>
+            <button
+              onClick={openGestureMode}
+              className="w-full flex flex-col items-center justify-center py-3.5 px-1 rounded-xl text-[10px] font-bold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors gap-1.5 cursor-pointer group"
+              title="3D Holographic Gesture Mode"
+            >
+              <Sparkles className="w-5 h-5 text-cyan-500 animate-pulse group-hover:scale-110 transition-transform" />
+              <span>Holo 3D</span>
+            </button>
           </div>
         ) : (
           /* Expanded Full Sidebar */
@@ -214,6 +235,13 @@ export const Sidebar: React.FC = () => {
                 <PlaySquare className="w-5 h-5" />
                 <span>Subscriptions</span>
               </NavLink>
+              <button
+                onClick={openGestureMode}
+                className="w-full flex items-center gap-5 px-3 py-2.5 rounded-xl text-sm font-bold text-cyan-600 dark:text-cyan-400 hover:bg-cyan-50 dark:hover:bg-cyan-950/40 transition-colors cursor-pointer group"
+              >
+                <Sparkles className="w-5 h-5 text-cyan-500 animate-pulse group-hover:scale-110 transition-transform" />
+                <span>3D Gesture Mode</span>
+              </button>
             </div>
 
             <div className="my-2.5 border-t border-neutral-200 dark:border-neutral-800" />
