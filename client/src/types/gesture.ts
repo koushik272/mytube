@@ -39,3 +39,16 @@ export interface Landmark3D {
   y: number;
   z: number;
 }
+
+export type HoloModeView = 'controls' | 'search_keyboard';
+
+export interface HandCursor {
+  screenX: number; // 0 to window.innerWidth
+  screenY: number; // 0 to window.innerHeight
+  normX: number;   // 0.0 to 1.0 (mirrored for natural gesture pointing)
+  normY: number;   // 0.0 to 1.0
+  isPinching: boolean;
+  pinchDistance: number;
+  isHandPresent: boolean;
+}
+

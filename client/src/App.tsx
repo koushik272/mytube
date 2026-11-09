@@ -1,5 +1,5 @@
 import React from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useNavigate } from 'react-router-dom';
 import { Navbar } from './components/layout/Navbar';
 import { Sidebar } from './components/layout/Sidebar';
 import { MobileNav } from './components/layout/MobileNav';
@@ -24,10 +24,16 @@ import { useVideo } from './context/VideoContext';
 import { HolographicGestureMode } from './components/gesture/HolographicGestureMode';
 
 export const App: React.FC = () => {
+  const navigate = useNavigate();
   const { isGestureModeActive, closeGestureMode } = useGestureMode();
-  const { activeVideo, likedVideos, toggleLike } = useVideo();
+  const { activeVideo, playVideo, likedVideos, toggleLike } = useVideo();
   const [isPlaying, setIsPlaying] = React.useState(true);
   const [volume, setVolume] = React.useState(100);
+
+  const handleSelectVideo = (video: any) => {
+    playVideo(video);
+    navigate(`/watch/${video.id}`);
+  };
 
   const handlePlay = () => {
     setIsPlaying(true);
@@ -119,6 +125,7 @@ export const App: React.FC = () => {
         onLike={handleLike}
         isLiked={isLiked}
         videoTitle={activeVideo?.title || 'MyTube 3D Holographic Space'}
+        onSelectVideo={handleSelectVideo}
       />
     </div>
   );

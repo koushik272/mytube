@@ -26,11 +26,15 @@ import {
   Eye,
   EyeOff,
   AlertTriangle,
+  Search,
+  Keyboard,
 } from 'lucide-react';
-import { GestureType, Landmark3D, GestureSettings } from '../../types/gesture';
+import { GestureType, Landmark3D, GestureSettings, HoloModeView } from '../../types/gesture';
+import { Video } from '../../types/video';
 import { GestureClassifier } from '../../utils/gestureRecognition';
 import { loadMediaPipeHands } from '../../utils/mediapipeLoader';
 import { HolographicCanvas } from './HolographicCanvas';
+import { HolographicKeyboard } from './HolographicKeyboard';
 import { GestureCalibrationModal } from './GestureCalibrationModal';
 import { hologramAudio } from '../../utils/hologramSounds';
 
@@ -50,6 +54,7 @@ interface HolographicGestureModeProps {
   onLike?: () => void;
   isLiked?: boolean;
   videoTitle?: string;
+  onSelectVideo?: (video: Video) => void;
 }
 
 export const HolographicGestureMode: React.FC<HolographicGestureModeProps> = ({
@@ -67,12 +72,16 @@ export const HolographicGestureMode: React.FC<HolographicGestureModeProps> = ({
   onLike,
   isLiked = false,
   videoTitle = 'MyTube Holographic Experience',
+  onSelectVideo,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const handsRef = useRef<any>(null);
   const cameraUtilRef = useRef<any>(null);
   const classifierRef = useRef<GestureClassifier>(new GestureClassifier());
+
+  // View state: Controls Mode vs 3D Virtual Keyboard & Search Mode
+  const [activeView, setActiveView] = useState<HoloModeView>('controls');
 
   // Camera & Tracking State
   const [cameraPermission, setCameraPermission] = useState<'prompt' | 'granted' | 'denied'>('prompt');
@@ -445,28 +454,56 @@ export const HolographicGestureMode: React.FC<HolographicGestureModeProps> = ({
           </div>
         </div>
 
-        {/* Center: Live Gesture HUD Pill */}
-        <div className="hidden md:flex items-center gap-3 px-4 py-1.5 rounded-full bg-cyan-950/40 border border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
-          <Activity className="w-4 h-4 text-cyan-400 animate-spin" />
-          <span className="text-xs font-mono text-cyan-300">
-            {detectedGesture ? (
-              <span className="font-extrabold tracking-wide text-emerald-300">
-                GESTURE: {detectedGesture.replace('_', ' ')} ({(confidence * 100).toFixed(0)}%)
-              </span>
-            ) : isCameraActive ? (
-              'AWAITING HAND GESTURE...'
-            ) : (
-              'CAMERA STANDBY'
+        {/* Center: Mode Switcher & Live Gesture HUD Pill */}
+        <div className="flex items-center gap-3">
+          {/* Mode Switcher: Player Controls vs 3D Virtual Keyboard & Search */}
+          <div className="flex items-center p-0.5 rounded-full bg-neutral-950/80 border border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+            <button
+              onClick={() => setActiveView('controls')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'controls'
+                  ? 'bg-cyan-500 text-black shadow-[0_0_15px_rgba(0,240,255,0.4)]'
+                  : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <Play className="w-3 h-3" />
+              <span className="hidden sm:inline">3D Controls</span>
+            </button>
+            <button
+              onClick={() => setActiveView('search_keyboard')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
+                activeView === 'search_keyboard'
+                  ? 'bg-gradient-to-r from-cyan-400 via-teal-300 to-emerald-400 text-black shadow-[0_0_20px_rgba(0,240,255,0.5)] font-extrabold'
+                  : 'text-neutral-300 hover:text-white'
+              }`}
+            >
+              <Keyboard className="w-3.5 h-3.5" />
+              <span>3D Keyboard & Search</span>
+            </button>
+          </div>
+
+          <div className="hidden lg:flex items-center gap-3 px-4 py-1.5 rounded-full bg-cyan-950/40 border border-cyan-500/40 shadow-[0_0_15px_rgba(0,240,255,0.2)]">
+            <Activity className="w-4 h-4 text-cyan-400 animate-spin" />
+            <span className="text-xs font-mono text-cyan-300">
+              {detectedGesture ? (
+                <span className="font-extrabold tracking-wide text-emerald-300">
+                  GESTURE: {detectedGesture.replace('_', ' ')} ({(confidence * 100).toFixed(0)}%)
+                </span>
+              ) : isCameraActive ? (
+                'AWAITING HAND GESTURE...'
+              ) : (
+                'CAMERA STANDBY'
+              )}
+            </span>
+            {lockOnProgress > 0 && (
+              <div className="w-12 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-75"
+                  style={{ width: `${Math.min(100, lockOnProgress * 100)}%` }}
+                />
+              </div>
             )}
-          </span>
-          {lockOnProgress > 0 && (
-            <div className="w-12 h-1.5 bg-neutral-800 rounded-full overflow-hidden">
-              <div
-                className="h-full bg-gradient-to-r from-cyan-400 to-emerald-400 transition-all duration-75"
-                style={{ width: `${Math.min(100, lockOnProgress * 100)}%` }}
-              />
-            </div>
-          )}
+          </div>
         </div>
 
         {/* Right: Actions & Tools */}
@@ -592,10 +629,10 @@ export const HolographicGestureMode: React.FC<HolographicGestureModeProps> = ({
       </header>
 
       {/* 3. Center Workspace Area */}
-      <main className="relative flex-1 flex flex-col items-center justify-center p-4">
+      <main className="relative flex-1 flex flex-col items-center justify-center p-4 overflow-y-auto">
         {/* Action Confirmation Banner Overlay */}
         {actionBanner && (
-          <div className="absolute top-8 z-40 flex items-center gap-3 px-6 py-3 rounded-2xl bg-black/85 backdrop-blur-xl border border-cyan-400/60 shadow-[0_0_35px_rgba(0,240,255,0.4)] animate-in fade-in zoom-in-95 duration-150">
+          <div className="absolute top-4 z-50 flex items-center gap-3 px-6 py-3 rounded-2xl bg-black/85 backdrop-blur-xl border border-cyan-400/60 shadow-[0_0_35px_rgba(0,240,255,0.4)] animate-in fade-in zoom-in-95 duration-150">
             {actionBanner.icon}
             <span className="text-base font-extrabold tracking-wider text-white uppercase">
               {actionBanner.text}
@@ -603,65 +640,93 @@ export const HolographicGestureMode: React.FC<HolographicGestureModeProps> = ({
           </div>
         )}
 
-        {/* Initial Camera Permission Card (Shown when camera is inactive) */}
-        {!isCameraActive && (
-          <div className="relative z-30 max-w-lg w-full p-6 sm:p-8 rounded-3xl bg-gradient-to-b from-[#0b1424]/90 via-[#060b14]/90 to-[#02050a]/90 border border-cyan-500/40 shadow-[0_0_50px_rgba(0,240,255,0.25)] text-center animate-in fade-in duration-200">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-cyan-500/10 border border-cyan-400/40 flex items-center justify-center text-cyan-400 shadow-[0_0_20px_rgba(0,240,255,0.3)]">
-              <Camera className="w-8 h-8" />
-            </div>
+        {/* VIEW 1: 3D VIRTUAL KEYBOARD & VIDEO SEARCH VIEW */}
+        {activeView === 'search_keyboard' ? (
+          <div className="w-full flex justify-center py-2 animate-in fade-in zoom-in-95 duration-200">
+            <HolographicKeyboard
+              landmarks={currentLandmarks}
+              detectedGesture={detectedGesture}
+              onSelectVideo={(video) => {
+                if (onSelectVideo) onSelectVideo(video);
+                setActiveView('controls');
+                showActionBanner(`NOW PLAYING`, <Play className="w-6 h-6 text-emerald-400 fill-emerald-400" />, 'emerald');
+              }}
+              onClose={onClose}
+              onSwitchToControls={() => setActiveView('controls')}
+            />
+          </div>
+        ) : (
+          /* VIEW 2: 3D PLAYER CONTROLS VIEW */
+          <>
+            {/* Initial Camera Permission Card (Shown when camera is inactive) */}
+            {!isCameraActive && (
+              <div className="relative z-30 max-w-lg w-full p-6 sm:p-8 rounded-3xl bg-gradient-to-b from-[#0b1424]/90 via-[#060b14]/90 to-[#02050a]/90 border border-cyan-500/40 shadow-[0_0_50px_rgba(0,240,255,0.25)] text-center animate-in fade-in duration-200">
+                <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-cyan-500/10 border border-cyan-400/40 flex items-center justify-center text-cyan-400 shadow-[0_0_20px_rgba(0,240,255,0.3)]">
+                  <Camera className="w-8 h-8" />
+                </div>
 
-            <h3 className="text-lg sm:text-xl font-extrabold text-white mb-2">
-              Activate 3D Holographic Hand Vision
-            </h3>
-            <p className="text-xs text-neutral-300 leading-relaxed max-w-md mx-auto mb-5">
-              Control video playback, volume, fullscreen, and navigation in mid-air using your laptop webcam and on-device MediaPipe AI hand tracking.
-            </p>
-
-            {/* Privacy Guarantee Pill */}
-            <div className="mb-6 p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 flex items-start gap-3 text-left">
-              <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-xs font-bold text-emerald-300">Privacy Guarantee</p>
-                <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
-                  Your webcam stream is analyzed 100% locally in your browser. No video, images, or audio are ever recorded or sent to any server.
+                <h3 className="text-lg sm:text-xl font-extrabold text-white mb-2">
+                  Activate 3D Holographic Hand Vision
+                </h3>
+                <p className="text-xs text-neutral-300 leading-relaxed max-w-md mx-auto mb-5">
+                  Control video playback, volume, fullscreen, and mid-air search using your laptop webcam and on-device MediaPipe AI hand tracking.
                 </p>
-              </div>
-            </div>
 
-            {errorMessage && (
-              <div className="mb-4 p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-xs flex items-center gap-2 text-left">
-                <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
-                <span>{errorMessage}</span>
+                {/* Privacy Guarantee Pill */}
+                <div className="mb-6 p-3 rounded-2xl bg-cyan-950/40 border border-cyan-500/30 flex items-start gap-3 text-left">
+                  <ShieldCheck className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="text-xs font-bold text-emerald-300">Privacy Guarantee</p>
+                    <p className="text-[11px] text-neutral-400 mt-0.5 leading-relaxed">
+                      Your webcam stream is analyzed 100% locally in your browser. No video, images, or audio are ever recorded or sent to any server.
+                    </p>
+                  </div>
+                </div>
+
+                {errorMessage && (
+                  <div className="mb-4 p-3 rounded-xl bg-red-950/40 border border-red-500/50 text-red-300 text-xs flex items-center gap-2 text-left">
+                    <AlertTriangle className="w-4 h-4 shrink-0 text-red-400" />
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                  <button
+                    onClick={startCamera}
+                    disabled={isCameraLoading}
+                    className="w-full sm:w-auto px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-extrabold text-xs tracking-wider transition-all shadow-[0_0_25px_rgba(0,240,255,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isCameraLoading ? (
+                      <>
+                        <Activity className="w-4 h-4 animate-spin text-black" />
+                        <span>Initializing MediaPipe...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="w-4 h-4 text-black" />
+                        <span>Grant Camera & Start</span>
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={() => setActiveView('search_keyboard')}
+                    className="w-full sm:w-auto px-5 py-3 rounded-full bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/50 text-cyan-300 text-xs font-bold transition-colors cursor-pointer flex items-center justify-center gap-1.5"
+                  >
+                    <Keyboard className="w-4 h-4" />
+                    <span>Open 3D Keyboard</span>
+                  </button>
+
+                  <button
+                    onClick={() => setIsCalibrationOpen(true)}
+                    className="w-full sm:w-auto px-5 py-3 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    View Guide
+                  </button>
+                </div>
               </div>
             )}
-
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-              <button
-                onClick={startCamera}
-                disabled={isCameraLoading}
-                className="w-full sm:w-auto px-8 py-3 rounded-full bg-gradient-to-r from-cyan-500 via-teal-400 to-emerald-400 hover:from-cyan-400 hover:to-emerald-300 text-black font-extrabold text-xs tracking-wider transition-all shadow-[0_0_25px_rgba(0,240,255,0.4)] flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                {isCameraLoading ? (
-                  <>
-                    <Activity className="w-4 h-4 animate-spin text-black" />
-                    <span>Initializing MediaPipe...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="w-4 h-4 text-black" />
-                    <span>Grant Camera & Start</span>
-                  </>
-                )}
-              </button>
-
-              <button
-                onClick={() => setIsCalibrationOpen(true)}
-                className="w-full sm:w-auto px-5 py-3 rounded-full bg-neutral-900 hover:bg-neutral-800 border border-neutral-700 text-neutral-300 text-xs font-semibold transition-colors cursor-pointer"
-              >
-                View Gesture Guide
-              </button>
-            </div>
-          </div>
+          </>
         )}
 
         {/* Hidden Camera Video Capture Element (or Mini HUD View) */}
@@ -834,14 +899,24 @@ export const HolographicGestureMode: React.FC<HolographicGestureModeProps> = ({
           )}
         </div>
 
-        {/* Right: Calibration Button */}
-        <button
-          onClick={() => setIsCalibrationOpen(true)}
-          className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Calibrate Gestures</span>
-        </button>
+        {/* Right: 3D Keyboard Quick Toggle & Calibration */}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setActiveView(activeView === 'search_keyboard' ? 'controls' : 'search_keyboard')}
+            className="px-3 py-1.5 rounded-full bg-cyan-950/60 hover:bg-cyan-900/60 border border-cyan-500/50 text-cyan-300 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-[0_0_10px_rgba(0,240,255,0.2)]"
+          >
+            <Keyboard className="w-3.5 h-3.5" />
+            <span>{activeView === 'search_keyboard' ? 'Back to Controls' : 'Open 3D Keyboard'}</span>
+          </button>
+
+          <button
+            onClick={() => setIsCalibrationOpen(true)}
+            className="text-xs text-cyan-400 hover:text-cyan-300 font-semibold flex items-center gap-1 cursor-pointer transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5" />
+            <span>Calibrate Gestures</span>
+          </button>
+        </div>
       </footer>
 
       {/* 5. Gesture Calibration & Guide Modal */}

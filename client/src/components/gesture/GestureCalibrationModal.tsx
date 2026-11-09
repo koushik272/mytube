@@ -208,6 +208,34 @@ export const GestureCalibrationModal: React.FC<GestureCalibrationModalProps> = (
             })}
           </div>
 
+          {/* 3D Virtual Keyboard & Gesture Video Selection Special Feature Guide */}
+          <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/60 via-purple-950/40 to-emerald-950/40 border border-cyan-400/50 shadow-[0_0_25px_rgba(0,240,255,0.2)] mt-4">
+            <div className="flex items-center gap-2 mb-2 text-cyan-300 font-bold text-xs uppercase tracking-wider font-mono">
+              <Zap className="w-4 h-4 text-yellow-400" />
+              <span>3D Virtual Keyboard & Hand-Gesture Search Guide</span>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs text-neutral-300">
+              <div className="p-2.5 rounded-xl bg-black/50 border border-cyan-500/30">
+                <span className="font-bold text-cyan-300 block mb-1">1. Point Index Finger</span>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Move your index finger to steer the holographic targeting crosshair across virtual keys and video cards.
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-black/50 border border-cyan-500/30">
+                <span className="font-bold text-yellow-300 block mb-1">2. Pinch or Hover to Type</span>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Pinch thumb and index together (or hold steady for 0.4s) to press letters, space, backspace, or search.
+                </p>
+              </div>
+              <div className="p-2.5 rounded-xl bg-black/50 border border-cyan-500/30">
+                <span className="font-bold text-emerald-300 block mb-1">3. Select Video with Hand</span>
+                <p className="text-[11px] text-neutral-400 leading-relaxed">
+                  Hover over any video card in search results and pinch to launch immediate playback in the YouTube player!
+                </p>
+              </div>
+            </div>
+          </div>
+
           {/* Optimal Setup Instructions */}
           <div className="p-4 rounded-2xl bg-cyan-950/20 border border-cyan-500/30 flex flex-col sm:flex-row items-center justify-between gap-4 mt-4">
             <div className="flex items-start gap-3">
