@@ -35,7 +35,7 @@ import {
 } from '../../utils/playbackPosition';
 import { parseDurationToSeconds } from '../../utils/youtube';
 
-const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 
 const QUALITY_LABELS: Record<string, string> = {
   highres: '4K (2160p)',
@@ -166,6 +166,50 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       setHudState((prev) => ({ ...prev, visible: false }));
     }, 1100);
   }, []);
+
+  // Playback Speed State & Controller
+  const [currentPlaybackSpeed, setCurrentPlaybackSpeed] = useState<number>(playbackSpeed || 1);
+
+  // Apply playback speed through both YT Player API and direct postMessage
+  const applyPlaybackRate = useCallback(
+    (speed: number) => {
+      setCurrentPlaybackSpeed(speed);
+      if (onSpeedChange) {
+        onSpeedChange(speed);
+      }
+      // 1. Official YouTube Player API method
+      if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
+        try {
+          playerRef.current.setPlaybackRate(speed);
+        } catch (err) {
+          console.warn('Error calling playerRef.setPlaybackRate:', err);
+        }
+      }
+      // 2. Direct postMessage to IFrame Window (bulletproof fallback)
+      const iframeId = `yt-player-frame-${videoId}`;
+      const iframe = document.getElementById(iframeId) as HTMLIFrameElement;
+      if (iframe?.contentWindow) {
+        try {
+          iframe.contentWindow.postMessage(
+            JSON.stringify({
+              event: 'command',
+              func: 'setPlaybackRate',
+              args: [speed],
+            }),
+            '*'
+          );
+        } catch {}
+      }
+    },
+    [videoId, onSpeedChange]
+  );
+
+  // Sync with prop changes (e.g. from WatchSettingsModal)
+  useEffect(() => {
+    if (playbackSpeed && playbackSpeed !== currentPlaybackSpeed) {
+      applyPlaybackRate(playbackSpeed);
+    }
+  }, [playbackSpeed, currentPlaybackSpeed, applyPlaybackRate]);
 
   const cancelCountdown = useCallback(() => {
     if (countdownIntervalRef.current) {
@@ -321,7 +365,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
   // Stable refs for event callbacks to prevent unnecessary player re-mounts
   const propsRef = useRef({
-    playbackSpeed,
+    playbackSpeed: currentPlaybackSpeed,
     onEnded,
     autoplayEnabled,
     nextVideo,
@@ -329,9 +373,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     queryPlayerCapabilities,
     showHud,
     title,
+    applyPlaybackRate,
   });
   propsRef.current = {
-    playbackSpeed,
+    playbackSpeed: currentPlaybackSpeed,
     onEnded,
     autoplayEnabled,
     nextVideo,
@@ -339,6 +384,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     queryPlayerCapabilities,
     showHud,
     title,
+    applyPlaybackRate,
   };
 
   // Initialize official YouTube Player connected to the persistent iframe
@@ -379,9 +425,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
               if (cur > 0) setCurrentTime(cur);
 
               // 1. Restore playback speed
-              if (propsRef.current.playbackSpeed && event.target.setPlaybackRate) {
-                event.target.setPlaybackRate(propsRef.current.playbackSpeed);
-              }
+              const targetSpeed = propsRef.current.playbackSpeed || 1;
+              propsRef.current.applyPlaybackRate(targetSpeed);
 
               // 2. Restore playback position
               const savedPos = getSavedPlaybackPosition(videoId);
@@ -415,6 +460,9 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                 const dur = playerRef.current?.getDuration?.() || 0;
                 if (dur > 0) setDuration(dur);
                 propsRef.current.queryPlayerCapabilities();
+                // Ensure correct playback rate is active
+                const targetSpeed = propsRef.current.playbackSpeed || 1;
+                propsRef.current.applyPlaybackRate(targetSpeed);
               } else if (event.data === 2) {
                 setIsPlaying(false);
               } else if (event.data === 0) {
@@ -552,7 +600,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   // Listen to remote Holographic Gesture actions
   useEffect(() => {
     const handleRemoteAction = (e: any) => {
-      const { action, volume: newVol } = e.detail || {};
+      const { action, volume: newVol, speed: newSpeed } = e.detail || {};
       if (action === 'play') {
         playerRef.current?.playVideo?.();
         setIsPlaying(true);
@@ -563,12 +611,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         handleVolumeChange(newVol);
       } else if (action === 'fullscreen') {
         toggleFullscreen();
+      } else if (action === 'speed' && typeof newSpeed === 'number') {
+        applyPlaybackRate(newSpeed);
+        showHud(<Gauge className="w-8 h-8 text-white" />, `${newSpeed === 1 ? '1x (Normal)' : newSpeed + 'x'} Speed`);
       }
     };
 
     window.addEventListener('mytube:player-action', handleRemoteAction);
     return () => window.removeEventListener('mytube:player-action', handleRemoteAction);
-  }, []);
+  }, [applyPlaybackRate, showHud]);
 
   // Select Quality
   const handleSelectQuality = (qualityCode: string) => {
@@ -637,13 +688,8 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const handleSelectSpeed = (speed: number) => {
     setIsSettingsOpen(false);
     setSettingsView('main');
-    if (onSpeedChange) onSpeedChange(speed);
-    if (playerRef.current && typeof playerRef.current.setPlaybackRate === 'function') {
-      try {
-        playerRef.current.setPlaybackRate(speed);
-        showHud(<Gauge className="w-8 h-8 text-white" />, `${speed}x Speed`);
-      } catch {}
-    }
+    applyPlaybackRate(speed);
+    showHud(<Gauge className="w-8 h-8 text-white" />, `${speed === 1 ? '1x (Normal)' : speed + 'x'} Speed`);
   };
 
   // Keyboard Shortcuts Handler
@@ -766,13 +812,44 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           }
         } catch {}
       }
+
+      // < (Shift + ,): Slow down playback speed
+      if (e.key === '<' || (e.shiftKey && (e.key === ',' || e.code === 'Comma'))) {
+        e.preventDefault();
+        const curIdx = PLAYBACK_SPEEDS.indexOf(currentPlaybackSpeed);
+        const nextIdx = Math.max(0, (curIdx === -1 ? PLAYBACK_SPEEDS.indexOf(1) : curIdx) - 1);
+        const targetSpeed = PLAYBACK_SPEEDS[nextIdx];
+        applyPlaybackRate(targetSpeed);
+        showHud(<Gauge className="w-8 h-8 text-white" />, `${targetSpeed === 1 ? '1x (Normal)' : targetSpeed + 'x'} Speed`);
+      }
+
+      // > (Shift + .): Speed up playback speed
+      if (e.key === '>' || (e.shiftKey && (e.key === '.' || e.code === 'Period'))) {
+        e.preventDefault();
+        const curIdx = PLAYBACK_SPEEDS.indexOf(currentPlaybackSpeed);
+        const nextIdx = Math.min(PLAYBACK_SPEEDS.length - 1, (curIdx === -1 ? PLAYBACK_SPEEDS.indexOf(1) : curIdx) + 1);
+        const targetSpeed = PLAYBACK_SPEEDS[nextIdx];
+        applyPlaybackRate(targetSpeed);
+        showHud(<Gauge className="w-8 h-8 text-white" />, `${targetSpeed === 1 ? '1x (Normal)' : targetSpeed + 'x'} Speed`);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, [showHud, volume, isMuted, theaterMode, onToggleTheaterMode, hasCaptions, isCaptionsOn, captionTracks]);
+  }, [
+    showHud,
+    volume,
+    isMuted,
+    theaterMode,
+    onToggleTheaterMode,
+    hasCaptions,
+    isCaptionsOn,
+    captionTracks,
+    currentPlaybackSpeed,
+    applyPlaybackRate,
+  ]);
 
   // Handle YouTube Error Codes (101/150: Creator restricted, 153: Embed policy, 100: Not found, 2/5: Parameter/Player error)
   if (
@@ -877,7 +954,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           title="Change playback speed"
         >
           <Gauge className="w-3.5 h-3.5 text-blue-400" />
-          <span>{playbackSpeed === 1 ? '1x' : `${playbackSpeed}x`}</span>
+          <span>{currentPlaybackSpeed === 1 ? '1x' : `${currentPlaybackSpeed}x`}</span>
         </button>
       </div>
 
@@ -993,7 +1070,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                         <span>Playback Speed</span>
                       </div>
                       <div className="flex items-center gap-1 text-neutral-400 font-semibold">
-                        <span>{playbackSpeed === 1 ? 'Normal' : `${playbackSpeed}x`}</span>
+                        <span>{currentPlaybackSpeed === 1 ? 'Normal' : `${currentPlaybackSpeed}x`}</span>
                         <ChevronRight className="w-3.5 h-3.5" />
                       </div>
                     </button>
@@ -1069,7 +1146,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
                         className="w-full flex items-center justify-between px-4 py-2 hover:bg-white/10 text-left transition-colors cursor-pointer"
                       >
                         <span>{sp === 1 ? 'Normal' : `${sp}x`}</span>
-                        {playbackSpeed === sp && <Check className="w-3.5 h-3.5 text-red-500 font-bold" />}
+                        {currentPlaybackSpeed === sp && <Check className="w-3.5 h-3.5 text-red-500 font-bold" />}
                       </button>
                     ))}
                   </div>

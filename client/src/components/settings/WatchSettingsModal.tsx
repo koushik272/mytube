@@ -20,7 +20,7 @@ import { useSettings } from '../../context/SettingsContext';
 import { useVideo } from '../../context/VideoContext';
 import { useAuth } from '../../context/AuthContext';
 
-const PLAYBACK_SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
+const PLAYBACK_SPEED_OPTIONS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
 const QUALITY_PREFERENCE_OPTIONS = [
   { id: 'auto', label: 'Auto' },
   { id: 'hd1080', label: '1080p' },
@@ -127,17 +127,22 @@ export const WatchSettingsModal: React.FC = () => {
             <p className="text-xs text-neutral-500 mb-3">
               Select your preferred playback speed across all YouTube videos.
             </p>
-            <div className="grid grid-cols-4 sm:grid-cols-7 gap-2">
+            <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
               {PLAYBACK_SPEED_OPTIONS.map((speed) => (
                 <button
                   key={speed}
                   onClick={async () => {
                     await updateSettings({ playbackSpeed: speed });
-                    showToast(`Playback speed set to ${speed}x ⚡`);
+                    window.dispatchEvent(
+                      new CustomEvent('mytube:player-action', {
+                        detail: { action: 'speed', speed },
+                      })
+                    );
+                    showToast(`Playback speed set to ${speed === 1 ? '1x (Normal)' : speed + 'x'} ⚡`);
                   }}
                   className={`py-2 px-1 rounded-xl text-xs font-bold transition-all cursor-pointer text-center ${
                     settings.playbackSpeed === speed
-                      ? 'bg-red-600 text-white shadow-md scale-105'
+                      ? 'bg-red-600 text-white shadow-md scale-105 ring-2 ring-red-400'
                       : 'bg-neutral-100 dark:bg-neutral-800 text-neutral-700 dark:text-neutral-300 hover:bg-neutral-200 dark:hover:bg-neutral-700'
                   }`}
                 >
