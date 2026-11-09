@@ -25,6 +25,7 @@ import { useVideo } from '../context/VideoContext';
 import { useAuth } from '../context/AuthContext';
 import { useSettings } from '../context/SettingsContext';
 import { formatLikes, formatViews } from '../utils/formatters';
+import { extractYouTubeVideoId } from '../utils/youtube';
 import { YouTubePlayer } from '../components/video/YouTubePlayer';
 import {
   getYouTubeVideoById,
@@ -41,7 +42,8 @@ import {
 } from '../firebase/firestore';
 
 export const WatchPage: React.FC = () => {
-  const { id = '' } = useParams<{ id: string }>();
+  const { id: rawId = '' } = useParams<{ id: string }>();
+  const id = extractYouTubeVideoId(rawId) || rawId;
   const [searchParams] = useSearchParams();
   const playlistId = searchParams.get('list');
   const navigate = useNavigate();
@@ -302,6 +304,7 @@ export const WatchPage: React.FC = () => {
     <YouTubePlayer
       videoId={activeVideo.id}
       title={activeVideo.title}
+      initialDuration={activeVideo.duration}
       nextVideo={nextEligibleVideo}
       onTriggerNext={handleTriggerNext}
       autoplayEnabled={settings.autoplayNext}

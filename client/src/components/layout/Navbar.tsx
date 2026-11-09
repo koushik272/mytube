@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { useNavigate, Link, useLocation } from 'react-router-dom';
 import {
   Menu,
   Search,
@@ -39,6 +39,12 @@ export const Navbar: React.FC = () => {
     settings,
   } = useSettings();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  // Close suggestions whenever the URL/route changes
+  useEffect(() => {
+    setShowSuggestions(false);
+  }, [location.pathname, location.search]);
 
   const [inputVal, setInputVal] = useState(searchQuery);
   const [isMobileSearchActive, setIsMobileSearchActive] = useState(false);

@@ -549,7 +549,7 @@ export class YouTubeService {
           title: oembed.title || `YouTube Video (${videoId})`,
           description: `Enjoy ${oembed.title} by ${oembed.author_name} with original audio on MyTube.`,
           thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
-          duration: 'Playing Now',
+          duration: '3:30',
           views: 1500000,
           likes: 84000,
           uploadedAt: 'Official Release',

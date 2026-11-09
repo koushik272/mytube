@@ -31,6 +31,7 @@ import {
   getSavedPlaybackPosition,
   formatPlaybackSeconds,
 } from '../../utils/playbackPosition';
+import { parseDurationToSeconds } from '../../utils/youtube';
 
 const PLAYBACK_SPEEDS = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 2];
 
@@ -56,6 +57,7 @@ export interface CaptionTrack {
 interface YouTubePlayerProps {
   videoId: string;
   title?: string;
+  initialDuration?: string | number;
   onEnded?: () => void;
   nextVideo?: {
     id: string;
@@ -86,6 +88,7 @@ declare global {
 export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   videoId,
   title,
+  initialDuration,
   onEnded,
   nextVideo,
   onTriggerNext,
@@ -100,6 +103,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   captionsEnabled = false,
   onToggleCaptions,
 }) => {
+  const containerRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const positionIntervalRef = useRef<any>(null);
@@ -112,7 +116,15 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
   const [isMuted, setIsMuted] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(0);
+  const [duration, setDuration] = useState<number>(() => parseDurationToSeconds(initialDuration));
+
+  // Sync initial duration if updated from parent
+  useEffect(() => {
+    const parsed = parseDurationToSeconds(initialDuration);
+    if (parsed > 0 && duration === 0) {
+      setDuration(parsed);
+    }
+  }, [initialDuration, duration]);
 
   // Quality state
   const [availableQualities, setAvailableQualities] = useState<string[]>(['auto']);
@@ -305,7 +317,29 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     };
   }, [videoId]);
 
-  // Initialize official YouTube Player
+  // Stable refs for event callbacks to prevent unnecessary player re-mounts
+  const propsRef = useRef({
+    playbackSpeed,
+    onEnded,
+    autoplayEnabled,
+    nextVideo,
+    onTriggerNext,
+    queryPlayerCapabilities,
+    showHud,
+    title,
+  });
+  propsRef.current = {
+    playbackSpeed,
+    onEnded,
+    autoplayEnabled,
+    nextVideo,
+    onTriggerNext,
+    queryPlayerCapabilities,
+    showHud,
+    title,
+  };
+
+  // Initialize official YouTube Player inside dedicated container
   useEffect(() => {
     setErrorStatus(null);
     setIsLoading(true);
@@ -314,71 +348,108 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
 
     let isMounted = true;
 
-    if (!window.YT || !window.YT.Player) {
+    // 1. If player instance already exists, seamlessly load new video ID
+    if (playerRef.current && typeof playerRef.current.loadVideoById === 'function') {
+      try {
+        playerRef.current.loadVideoById(videoId);
+        return;
+      } catch (err) {
+        console.warn('loadVideoById failed, re-mounting player:', err);
+      }
+    }
+
+    // 2. Ensure official YouTube IFrame API script is present (single insertion)
+    if (!document.getElementById('yt-iframe-api-script')) {
       const tag = document.createElement('script');
+      tag.id = 'yt-iframe-api-script';
       tag.src = 'https://www.youtube.com/iframe_api';
-      const firstScriptTag = document.getElementsByTagName('script')[0];
-      firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+      document.head.appendChild(tag);
     }
 
     const initPlayer = () => {
-      if (!isMounted) return;
-
-      const iframeId = `yt-player-${videoId}`;
-      const iframeEl = document.getElementById(iframeId);
-      if (!iframeEl) return;
+      if (!isMounted || !containerRef.current) return;
 
       try {
-        if (playerRef.current && typeof playerRef.current.destroy === 'function') {
-          playerRef.current.destroy();
-        }
+        // Clean container and create dedicated mount target div
+        containerRef.current.innerHTML = '';
+        const mountTarget = document.createElement('div');
+        mountTarget.id = `yt-target-${videoId}`;
+        mountTarget.className = 'w-full h-full';
+        containerRef.current.appendChild(mountTarget);
 
-        playerRef.current = new window.YT.Player(iframeId, {
+        playerRef.current = new window.YT.Player(mountTarget.id, {
+          videoId,
+          playerVars: {
+            autoplay: 0,
+            enablejsapi: 1,
+            origin: window.location.origin,
+            rel: 0,
+            playsinline: 1,
+            modestbranding: 1,
+            fs: 1,
+          },
           events: {
-            onReady: () => {
-              if (isMounted) {
-                setIsLoading(false);
+            onReady: (event: any) => {
+              if (!isMounted) return;
+              setIsLoading(false);
+              setErrorStatus(null);
 
-                // 1. Restore playback speed
-                if (playbackSpeed && playerRef.current.setPlaybackRate) {
-                  playerRef.current.setPlaybackRate(playbackSpeed);
-                }
+              // Set strict referrer policy on generated iframe for production security & anti-Error-153
+              const iframe = containerRef.current?.querySelector('iframe');
+              if (iframe) {
+                iframe.setAttribute('referrerpolicy', 'strict-origin-when-cross-origin');
+                iframe.className = 'w-full h-full border-0 absolute inset-0 z-10';
+              }
 
-                // 2. Restore playback position
-                const savedPos = getSavedPlaybackPosition(videoId);
-                if (savedPos > 3) {
-                  try {
-                    playerRef.current.seekTo(savedPos, true);
-                    showHud(
-                      <RotateCcw className="w-8 h-8 text-white fill-white" />,
-                      `Resumed at ${formatPlaybackSeconds(savedPos)}`
-                    );
-                  } catch {}
-                }
+              // Query duration & position
+              const dur = event.target.getDuration?.() || 0;
+              if (dur > 0) setDuration(dur);
+              const cur = event.target.getCurrentTime?.() || 0;
+              if (cur > 0) setCurrentTime(cur);
 
-                // 3. Query initial quality & captions
-                queryPlayerCapabilities();
+              // 1. Restore playback speed
+              if (propsRef.current.playbackSpeed && event.target.setPlaybackRate) {
+                event.target.setPlaybackRate(propsRef.current.playbackSpeed);
+              }
 
-                // 4. Set initial volume
-                if (playerRef.current.getVolume) {
-                  setVolume(playerRef.current.getVolume());
-                }
-                if (playerRef.current.isMuted) {
-                  setIsMuted(playerRef.current.isMuted());
-                }
+              // 2. Restore playback position
+              const savedPos = getSavedPlaybackPosition(videoId);
+              if (savedPos > 3) {
+                try {
+                  event.target.seekTo(savedPos, true);
+                  propsRef.current.showHud(
+                    <RotateCcw className="w-8 h-8 text-white fill-white" />,
+                    `Resumed at ${formatPlaybackSeconds(savedPos)}`
+                  );
+                } catch {}
+              }
+
+              // 3. Query initial quality & captions
+              propsRef.current.queryPlayerCapabilities();
+
+              // 4. Set initial volume
+              if (event.target.getVolume) {
+                setVolume(event.target.getVolume());
+              }
+              if (event.target.isMuted) {
+                setIsMuted(event.target.isMuted());
               }
             },
             onStateChange: (event: any) => {
+              if (!isMounted) return;
               // -1: unstarted, 0: ended, 1: playing, 2: paused, 3: buffering, 5: cued
               if (event.data === 1) {
                 setIsPlaying(true);
-                queryPlayerCapabilities();
+                setIsLoading(false);
+                const dur = playerRef.current?.getDuration?.() || 0;
+                if (dur > 0) setDuration(dur);
+                propsRef.current.queryPlayerCapabilities();
               } else if (event.data === 2) {
                 setIsPlaying(false);
               } else if (event.data === 0) {
                 setIsPlaying(false);
-                if (onEnded) onEnded();
-                if (autoplayEnabled && nextVideo && onTriggerNext) {
+                if (propsRef.current.onEnded) propsRef.current.onEnded();
+                if (propsRef.current.autoplayEnabled && propsRef.current.nextVideo && propsRef.current.onTriggerNext) {
                   startCountdown();
                 }
               }
@@ -386,7 +457,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             onPlaybackQualityChange: (event: any) => {
               if (event.data) {
                 setCurrentQuality(event.data);
-                showHud(
+                propsRef.current.showHud(
                   <Settings className="w-8 h-8 text-white" />,
                   `Quality: ${QUALITY_LABELS[event.data] || event.data}`
                 );
@@ -401,13 +472,17 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
             },
           },
         });
-      } catch (err) {
+      } catch (err: any) {
         console.warn('Error instantiating YT Player:', err);
+        if (isMounted) {
+          setErrorStatus(err?.message?.includes('Invalid') ? 2 : 5);
+          setIsLoading(false);
+        }
       }
     };
 
     if (window.YT && window.YT.Player) {
-      setTimeout(initPlayer, 100);
+      initPlayer();
     } else {
       const prev = window.onYouTubeIframeAPIReady;
       window.onYouTubeIframeAPIReady = () => {
@@ -419,7 +494,7 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
           clearInterval(interval);
           initPlayer();
         }
-      }, 200);
+      }, 100);
       setTimeout(() => clearInterval(interval), 5000);
     }
 
@@ -429,10 +504,11 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
       if (playerRef.current && typeof playerRef.current.destroy === 'function') {
         try {
           playerRef.current.destroy();
+          playerRef.current = null;
         } catch {}
       }
     };
-  }, [videoId, onEnded, autoplayEnabled, nextVideo, onTriggerNext, startCountdown, cancelCountdown]);
+  }, [videoId, cancelCountdown, startCountdown]);
 
   // Toggle Play / Pause
   const togglePlayPause = () => {
@@ -710,12 +786,14 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
     };
   }, [showHud, volume, isMuted, theaterMode, onToggleTheaterMode, hasCaptions, isCaptionsOn, captionTracks]);
 
-  // Handle YouTube Error Codes
+  // Handle YouTube Error Codes (101/150: Creator restricted, 153: Embed policy, 100: Not found, 2/5: Parameter/Player error)
   if (
     errorStatus === 101 ||
     errorStatus === 150 ||
+    errorStatus === 153 ||
     errorStatus === 100 ||
-    errorStatus === 2
+    errorStatus === 2 ||
+    errorStatus === 5
   ) {
     return (
       <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-neutral-900 border border-neutral-800 flex flex-col items-center justify-center p-6 text-center text-white shadow-2xl">
@@ -725,22 +803,35 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         <h3 className="text-lg font-bold mb-1">
           {errorStatus === 101 || errorStatus === 150
             ? 'Playback Restricted by YouTube Creator'
+            : errorStatus === 153
+            ? 'Playback Restricted on Third-Party Players'
             : 'Video Unavailable or Restricted'}
         </h3>
         <p className="text-xs text-neutral-400 max-w-md mb-6 leading-relaxed">
-          {errorStatus === 101 || errorStatus === 150
+          {errorStatus === 101 || errorStatus === 150 || errorStatus === 153
             ? 'The owner of this video has disabled embedded playback on third-party sites. You can watch it directly on YouTube with original audio and video.'
             : 'This video may be private, age-restricted, or removed by YouTube.'}
         </p>
-        <a
-          href={`https://www.youtube.com/watch?v=${videoId}`}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-lg"
-        >
-          <span>Watch on YouTube.com</span>
-          <ExternalLink className="w-4 h-4" />
-        </a>
+        <div className="flex flex-wrap items-center justify-center gap-3">
+          <a
+            href={`https://www.youtube.com/watch?v=${videoId}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-red-600 hover:bg-red-700 text-white text-xs font-bold transition-colors shadow-lg"
+          >
+            <span>Watch on YouTube.com</span>
+            <ExternalLink className="w-4 h-4" />
+          </a>
+          {nextVideo && onTriggerNext && (
+            <button
+              onClick={onTriggerNext}
+              className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-semibold transition-colors cursor-pointer"
+            >
+              <Play className="w-3.5 h-3.5" />
+              <span>Play Next Video</span>
+            </button>
+          )}
+        </div>
       </div>
     );
   }
@@ -752,18 +843,10 @@ export const YouTubePlayer: React.FC<YouTubePlayerProps> = ({
         isFullscreen ? 'rounded-none max-h-screen' : ''
       }`}
     >
-      {/* Official YouTube IFrame Player */}
-      <iframe
-        id={`yt-player-${videoId}`}
-        key={`yt-iframe-${videoId}`}
-        src={`https://www.youtube.com/embed/${videoId}?autoplay=1&enablejsapi=1&origin=${encodeURIComponent(
-          window.location.origin
-        )}&rel=0&playsinline=1&modestbranding=1&fs=1`}
-        title={title || 'YouTube video player'}
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen
-        className="w-full h-full border-0 absolute inset-0 z-10"
-        onLoad={() => setIsLoading(false)}
+      {/* Official YouTube IFrame Player Mounting Target */}
+      <div
+        ref={containerRef}
+        className="w-full h-full absolute inset-0 z-10 overflow-hidden"
       />
 
       {/* Top Floating Control Bar (Autoplay & Speed Badge) */}
