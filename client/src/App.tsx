@@ -16,6 +16,7 @@ import { SearchPage } from './pages/SearchPage';
 import { ChannelPage } from './pages/ChannelPage';
 import { WatchLaterPage } from './pages/WatchLaterPage';
 import { PlaylistPage } from './pages/PlaylistPage';
+import { GesturePage } from './pages/GesturePage';
 import { Miniplayer } from './components/video/Miniplayer';
 import { SaveToPlaylistModal } from './components/playlist/SaveToPlaylistModal';
 import { WatchSettingsModal } from './components/settings/WatchSettingsModal';
@@ -88,6 +89,8 @@ export const App: React.FC = () => {
             <Route path="/playlist/:id" element={<PlaylistPage />} />
             <Route path="/watch/:id" element={<WatchPage />} />
             <Route path="/search" element={<SearchPage />} />
+            <Route path="/gesture" element={<GesturePage />} />
+            <Route path="/hologram" element={<GesturePage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </div>
